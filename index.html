@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分流体检 · 代理分流与延迟检测</title>
+  <meta name="description" content="在浏览器里检测代理分流规则是否生效，并测量各站点的 HTTP 延迟。无需安装，不上传数据。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect x='1' y='1' width='34' height='34' rx='7' fill='%23161B18'/%3E%3Cpath d='M7 12h8l5 6h9M7 24h8l5-6h9' stroke='%23F0B45C' stroke-width='1.6' fill='none'/%3E%3Ccircle cx='7' cy='12' r='2' fill='%23F0B45C'/%3E%3Ccircle cx='7' cy='24' r='2' fill='%23F0B45C'/%3E%3Ccircle cx='29' cy='18' r='2.5' fill='%23F0B45C'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#" aria-label="分流体检">
+        <svg class="brand-mark" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="34" height="34" rx="7" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M7 12h8l5 6h9M7 24h8l5-6h9" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="7" cy="12" r="2" fill="currentColor"/>
+          <circle cx="7" cy="24" r="2" fill="currentColor"/>
+          <circle cx="29" cy="18" r="2.5" fill="currentColor"/>
+        </svg>
+        <span class="brand-title">分流体检</span>
+        <span class="brand-sub">routecheck</span>
+      </a>
+      <div class="topbar-right">
+        <p class="topbar-state">
+          <span class="led" id="header-led" aria-hidden="true"></span>
+          <span id="header-state" role="status" aria-live="polite">待机</span>
+        </p>
+        <button class="btn btn-primary btn-sm js-scan" id="header-scan" type="button">开始体检</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-inner">
+        <h1 id="hero-title">流量走哪条路，<br>不该靠猜。</h1>
+        <div class="hero-side">
+          <p class="hero-lede">扫描 <span id="hero-target-count">36</span> 个常用站点和 <span id="hero-exit-count">8</span> 个出口指纹（含国内对照），确认代理的分流规则是否按你设想的路线工作，顺便量一遍每条线路的延迟。</p>
+          <p class="hero-note">全程在浏览器里完成，不上传任何数据；延迟为 HTTP 实测，不是 ICMP。</p>
+        </div>
+      </div>
+
+      <div class="instrument">
+        <div class="screen">
+          <div class="screen-bar">
+            <span class="screen-id">延迟谱</span>
+            <span class="screen-progress" id="screen-progress">36 个目标</span>
+            <span class="screen-state"><span class="led" id="screen-led" aria-hidden="true"></span><span id="screen-state">待机</span></span>
+          </div>
+          <div class="screen-body">
+            <div class="scope-panel">
+              <div class="scope-head">
+                <span class="scope-title">每根柱子代表一个站点</span>
+                <span class="scope-legend">
+                  <span><i class="legend-dot" aria-hidden="true"></i>成功</span>
+                  <span><i class="legend-dot is-bad" aria-hidden="true"></i>超时</span>
+                </span>
+              </div>
+              <div class="scope-wrap">
+                <canvas id="scope" aria-hidden="true"></canvas>
+                <p class="scope-empty" id="scope-empty" aria-hidden="true">等待扫描 · 共 36 个目标</p>
+              </div>
+              <p class="scope-detail" id="scope-detail">悬停或点按柱子，查看单个站点</p>
+            </div>
+            <aside class="screen-stats" aria-label="扫描统计">
+              <div class="sstat"><span class="sstat-label">出口数</span><span class="sstat-value" id="ro-exits">—</span></div>
+              <div class="sstat"><span class="sstat-label">可达</span><span class="sstat-value" id="ro-reach">—</span></div>
+              <div class="sstat"><span class="sstat-label">国内中位</span><span class="sstat-value" id="ro-cn">—</span></div>
+              <div class="sstat"><span class="sstat-label">国际中位</span><span class="sstat-value" id="ro-intl">—</span></div>
+              <p class="screen-note" id="screen-note">36 个目标 · 每个最多 3 次</p>
+            </aside>
+          </div>
+        </div>
+        <div class="chassis">
+          <div class="verdict">
+            <span class="led led-lg" id="verdict-led" aria-hidden="true"></span>
+            <div class="verdict-copy">
+              <p class="verdict-title" id="verdict-title">待机中</p>
+              <p class="verdict-note" id="verdict-note">点击开始体检，逐个探测目的地与出口服务。</p>
+            </div>
+          </div>
+          <div class="chassis-actions">
+            <p class="plate">rt-01 · browser network tester</p>
+            <button class="btn btn-primary js-scan" id="main-scan" type="button">开始体检</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="exits-title">
+      <div class="section-head">
+        <h2 id="exits-title">出口指纹</h2>
+        <p>同一时刻，不同服务看到的你应该来自同一个 IP。出现多个，说明这些域名被分到了不同线路；其中包含境内对照点，用来识别「国内直连、国外代理」的分流。</p>
+      </div>
+      <div class="panel exit-panel">
+        <div class="exit-head" aria-hidden="true">
+          <span></span>
+          <span>探测点</span>
+          <span>看到的出口 IP</span>
+          <span>归属</span>
+          <span>延迟</span>
+        </div>
+        <div id="exit-list"></div>
+      </div>
+      <p class="section-foot" id="exit-summary">尚未探测。开始体检后，这里会列出 8 个独立服务返回的出口信息，其中两个位于国内。</p>
+    </section>
+
+    <section class="section" aria-labelledby="targets-title">
+      <div class="section-head">
+        <h2 id="targets-title">目的地矩阵</h2>
+        <p>勾选要测试的站点，每个最多请求三次，取最快的一次。</p>
+      </div>
+      <div class="panel target-panel">
+        <div class="matrix-tools">
+          <p class="matrix-count">
+            <span id="selection-count">已选 36 / 36</span>
+            <span class="matrix-hint" id="selection-hint" hidden>范围已改，重新体检后生效</span>
+          </p>
+          <div class="matrix-actions">
+            <button class="mini-btn" id="select-all" type="button">全选</button>
+            <button class="mini-btn" id="select-none" type="button">取消全选</button>
+          </div>
+        </div>
+        <div class="target-head" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span>站点</span>
+          <span>线路推测</span>
+          <span>采样</span>
+          <span>最快</span>
+        </div>
+        <div id="target-groups"></div>
+      </div>
+      <p class="section-foot" id="target-summary">「推测」只依据延迟和可达性，不代表代理客户端的真实规则；超时通常代表当前线路到不了那里。</p>
+    </section>
+
+    <section class="section" aria-labelledby="monitor-title">
+      <div class="section-head">
+        <h2 id="monitor-title">实时延迟</h2>
+        <p>盯住一个地址，每 2 秒测一次。适合改完规则后，马上验证某个站点是否恢复。</p>
+      </div>
+      <div class="monitor-panel">
+        <div class="monitor-input">
+          <label for="monitor-url">目标地址</label>
+          <div class="field-row">
+            <input id="monitor-url" type="text" inputmode="url" value="https://www.google.com/favicon.ico" spellcheck="false" autocomplete="off">
+            <button class="btn btn-primary" id="monitor-toggle" type="button">开始监测</button>
+          </div>
+          <p class="field-note" id="monitor-effective">请求将发往 https://www.google.com/favicon.ico</p>
+        </div>
+        <div class="monitor-readout">
+          <div class="monitor-big">
+            <span class="monitor-number" id="monitor-last">—</span>
+            <span class="monitor-unit">ms</span>
+            <span class="tag tone-idle" id="monitor-tag">未开始</span>
+          </div>
+          <canvas id="monitor-chart" aria-hidden="true"></canvas>
+          <dl class="monitor-stats">
+            <div><dt>最快</dt><dd id="monitor-min">—</dd></div>
+            <div><dt>平均</dt><dd id="monitor-avg">—</dd></div>
+            <div><dt>最慢</dt><dd id="monitor-max">—</dd></div>
+            <div><dt>丢包</dt><dd id="monitor-loss">—</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <footer class="method">
+      <div class="method-col method-lead-col">
+        <h2>结果怎么读</h2>
+        <p>出口指纹来自 8 个独立的 IP 查询服务，其中 myip.ipip.net 与 whois.pconline.com.cn 位于国内，用来对照国内直连与国外代理的出口；pconline 通过 JSONP 读取。它们如果给出不同 IP，通常意味着域名级分流正在工作；如果相同，可能全局走同一节点，也可能只是全部直连。判定会按 IPv4 / IPv6 分组，避免双栈地址被误认为分流。</p>
+      </div>
+      <div class="method-col">
+        <h3>测不到什么</h3>
+        <p>浏览器不能发 ICMP，这里的延迟是一次 HTTP 请求的往返时间；首次请求还包含 DNS、连接与 TLS。它适合比较线路快慢，不等于 ping 命令的 RTT。被拦截或超时的探测会在控制台留下网络错误，那是探测结果本身。</p>
+      </div>
+      <div class="method-col">
+        <h3>隐私</h3>
+        <p>所有请求由你的浏览器直接发出，页面本身不带后端，也不会上传扫描结果。探测目标只包含下方列出的公开站点。</p>
+      </div>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">这个页面需要 JavaScript 才能发起探测。</p></noscript>
+  <script src="app.js"></script>
+</body>
+</html>
